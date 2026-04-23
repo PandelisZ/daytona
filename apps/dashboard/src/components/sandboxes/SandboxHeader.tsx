@@ -21,6 +21,8 @@ interface SandboxHeaderProps {
   isFetching: boolean
   onStart: () => void
   onStop: () => void
+  onPause: () => void
+  onResume: () => void
   onArchive: () => void
   onRecover: () => void
   onDelete: () => void
@@ -40,6 +42,8 @@ export function SandboxHeader({
   isFetching,
   onStart,
   onStop,
+  onPause,
+  onResume,
   onArchive,
   onRecover,
   onDelete,

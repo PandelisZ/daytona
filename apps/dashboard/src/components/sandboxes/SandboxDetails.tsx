@@ -18,12 +18,15 @@ import {
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { FeatureFlags } from '@/enums/FeatureFlags'
 import { RoutePath } from '@/enums/RoutePath'
 import { useArchiveSandboxMutation } from '@/hooks/mutations/useArchiveSandboxMutation'
 import { useDeleteSandboxMutation } from '@/hooks/mutations/useDeleteSandboxMutation'
 import { useRecoverSandboxMutation } from '@/hooks/mutations/useRecoverSandboxMutation'
 import { useStartSandboxMutation } from '@/hooks/mutations/useStartSandboxMutation'
 import { useStopSandboxMutation } from '@/hooks/mutations/useStopSandboxMutation'
+import { usePauseSandboxMutation } from '@/hooks/mutations/usePauseSandboxMutation'
+import { useResumeSandboxMutation } from '@/hooks/mutations/useResumeSandboxMutation'
 import { useSandboxQuery } from '@/hooks/queries/useSandboxQuery'
 import { useApi } from '@/hooks/useApi'
 import { useConfig } from '@/hooks/useConfig'
@@ -37,6 +40,7 @@ import { SandboxSessionProvider } from '@/providers/SandboxSessionProvider'
 import { OrganizationRolePermissionsEnum, OrganizationUserRoleEnum } from '@daytona/api-client'
 import { isAxiosError } from 'axios'
 import { Container, GripVertical, RefreshCw } from 'lucide-react'
+import { useFeatureFlagEnabled } from 'posthog-js/react'
 import { useQueryState } from 'nuqs'
 import { useEffect, useState } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
@@ -86,6 +90,8 @@ export default function SandboxDetails() {
 
   const startMutation = useStartSandboxMutation({ invalidate: false })
   const stopMutation = useStopSandboxMutation({ invalidate: false })
+  const pauseMutation = usePauseSandboxMutation({ invalidate: false })
+  const resumeMutation = useResumeSandboxMutation({ invalidate: false })
   const archiveMutation = useArchiveSandboxMutation({ invalidate: false })
   const recoverMutation = useRecoverSandboxMutation({ invalidate: false })
   const deleteMutation = useDeleteSandboxMutation()
@@ -93,9 +99,13 @@ export default function SandboxDetails() {
   const writePermitted = authenticatedUserHasPermission(OrganizationRolePermissionsEnum.WRITE_SANDBOXES)
   const deletePermitted = authenticatedUserHasPermission(OrganizationRolePermissionsEnum.DELETE_SANDBOXES)
   const transitioning = sandbox ? isTransitioning(sandbox) : false
+  const linuxVmEnabled = useFeatureFlagEnabled(FeatureFlags.SANDBOX_LINUX_VM)
+
   const anyMutating =
     startMutation.isPending ||
     stopMutation.isPending ||
+    pauseMutation.isPending ||
+    resumeMutation.isPending ||
     archiveMutation.isPending ||
     recoverMutation.isPending ||
     deleteMutation.isPending
@@ -127,6 +137,26 @@ export default function SandboxDetails() {
       toast.success('Sandbox stopped')
     } catch (error) {
       handleApiError(error, 'Failed to stop sandbox')
+    }
+  }
+
+  const handlePause = async () => {
+    if (!sandbox) return
+    try {
+      await pauseMutation.mutateAsync({ sandboxId: sandbox.id })
+      toast.success('Sandbox pause initiated')
+    } catch (error) {
+      handleApiError(error, 'Failed to pause sandbox')
+    }
+  }
+
+  const handleResume = async () => {
+    if (!sandbox) return
+    try {
+      await resumeMutation.mutateAsync({ sandboxId: sandbox.id })
+      toast.success('Sandbox resume initiated')
+    } catch (error) {
+      handleApiError(error, 'Failed to resume sandbox')
     }
   }
 
@@ -192,6 +222,8 @@ export default function SandboxDetails() {
           isFetching={isFetching}
           onStart={handleStart}
           onStop={handleStop}
+          onPause={handlePause}
+          onResume={handleResume}
           onArchive={handleArchive}
           onRecover={handleRecover}
           onDelete={() => setDeleteDialogOpen(true)}
@@ -200,6 +232,15 @@ export default function SandboxDetails() {
           onCreateSshAccess={() => setCreateSshDialogOpen(true)}
           onRevokeSshAccess={() => setRevokeSshDialogOpen(true)}
           onScreenRecordings={handleScreenRecordings}
+          pauseResumeEnabled={!!linuxVmEnabled}
+          mutations={{
+            start: startMutation.isPending,
+            stop: stopMutation.isPending,
+            pause: pauseMutation.isPending,
+            resume: resumeMutation.isPending,
+            archive: archiveMutation.isPending,
+            recover: recoverMutation.isPending,
+          }}
         />
 
         {isNotFound ? (
